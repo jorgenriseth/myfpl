@@ -1,28 +1,41 @@
-rule bootstrap:
+from pathlib import Path
+
+rule download_base_data:
   output:
-    "bootstrap-static.json"
+    "base-data.json"
   shell:
     "curl https://fantasy.premierleague.com/api/bootstrap-static/ | jq . > {output}"
+
+
+def output_dir(_, output):
+  return Path(output[0]).parent
+
+rule parse_player:
+  input:
+    bootstrap="base-data.json"
+  output:
+    "players/{player}.json"
+  params:
+    outdir=output_dir
+  shell:
+    "python player_data.py --player {wildcards.player} --bootstrap {input.bootstrap} --output-dir {params.outdir}"
 
 
 #### Standard rule  #####
 rule validate_team:
   input:
-    "bootstrap-static.json",
+    bootstrap="base-data.json",
     team="team{x}.txt"
   output:
     "team{x}_validated.yaml"
   shell:
-    "python validate.py"
-    " -i {input.team}"
-    " -o {output}"
-    " -b {input[0]}"
+    "python validate.py -i {input.team} -o {output} -b {input.bootstrap}"
 
 
 #### Directory Outputer / Unknown files outputs ####
 rule score_players:
   input:
-    "team{x}_validated.txt"
+    "team{x}_validated.yaml"
   output:
     directory("team{x}_playerscores/")
   script:

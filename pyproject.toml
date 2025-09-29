@@ -9,6 +9,7 @@ dependencies = [
     "jupyter>=1.1.1",
     "pandas>=2.3.2",
     "snakemake>=9.11.2",
+    "click>=8.1.7",
 ]
 
 [dependency-groups]
@@ -18,7 +19,7 @@ dev = [
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
-platforms = ["linux-64"]
+platforms = ["linux-64", "osx-arm64"]
 
 [tool.pixi.pypi-dependencies]
 myfpl = { path = ".", editable = true }
@@ -29,5 +30,8 @@ dev = { features = ["dev"], solve-group = "default" }
 
 [tool.pixi.tasks]
 
-[tool.pixi.dependencies]
-apptainer = "*"
+
+
+[tool.setuptools]
+py-modules = ["player_data", "validate"]
+
