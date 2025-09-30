@@ -8,6 +8,7 @@ dependencies = [
     "fpl>=0.6.35",
     "jupyter>=1.1.1",
     "pandas>=2.3.2",
+    "matplotlib>=3.8",
     "snakemake>=9.11.2",
     "click>=8.1.7",
 ]

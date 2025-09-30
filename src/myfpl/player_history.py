@@ -25,7 +25,8 @@ from typing import Dict, List
 
 import click
 
-from player_data import load_bootstrap, find_players, sanitize_filename
+from myfpl.player_data import load_bootstrap, find_players, sanitize_filename
+from myfpl.fixtures import get_fixtures_map
 
 
 FPL_BASE = "https://fantasy.premierleague.com/api"
@@ -95,23 +96,15 @@ def cli(player: str, bootstrap_path: str, output_dir: str, no_fetch: bool):
 
     os.makedirs(output_dir, exist_ok=True)
 
-    # optionally fetch fixtures to map fixture -> kickoff_time and event (gameweek)
-    fixtures_map = {}
-    fixtures_path = os.path.join(output_dir, "fixtures.json")
-    if not no_fetch:
-        click.echo("Fetching fixtures from FPL API...")
-        fixtures = fetch_json(f"{FPL_BASE}/fixtures/")
-        save_json(fixtures, fixtures_path)
-        for fx in fixtures:
-            fixtures_map[fx.get("id")] = {
-                "event": fx.get("event"),
-                "kickoff_time": parse_kickoff(fx.get("kickoff_time")) if fx.get("kickoff_time") else None,
-                "team_homes": (fx.get("team_h") if "team_h" in fx else fx.get("team_h")),
-                "team_aways": (fx.get("team_a") if "team_a" in fx else fx.get("team_a")),
-            }
-        click.echo(f"Fetched {len(fixtures)} fixtures; saved to {fixtures_path}")
+    # obtain fixtures map (may fetch and save fixtures.json)
+    fixtures_map = get_fixtures_map(output_dir, no_fetch=no_fetch)
+    if fixtures_map:
+        click.echo(f"Loaded {len(fixtures_map)} fixtures")
     else:
-        click.echo("Skipping network fetch of fixtures ( --no-fetch ).")
+        if no_fetch:
+            click.echo("No local fixtures.json found; continuing without fixture mapping")
+        else:
+            click.echo("Failed to fetch fixtures; continuing without fixture mapping")
 
     combined_rows: List[Dict] = []
 

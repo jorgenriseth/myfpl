@@ -10,8 +10,14 @@ diacritics removed) containing name, position, cost, total_points and expanded s
 import json
 import os
 import re
+import time
 import unicodedata
+import urllib.request
+import urllib.error
 from difflib import get_close_matches
+from datetime import datetime
+from typing import Dict, List
+
 import click
 
 
@@ -30,6 +36,39 @@ def sanitize_filename(name: str) -> str:
 def load_bootstrap(path: str):
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+FPL_BASE = "https://fantasy.premierleague.com/api"
+
+
+def fetch_json(url: str, retries: int = 2, backoff: float = 0.3) -> Dict:
+    req = urllib.request.Request(url, headers={"User-Agent": "myfpl-fetcher/1.0"})
+    for attempt in range(retries + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as e:
+            # 404 or 5xx - no point retrying some errors
+            if 400 <= e.code < 500:
+                raise
+            if attempt < retries:
+                time.sleep(backoff * (attempt + 1))
+                continue
+            raise
+        except Exception:
+            if attempt < retries:
+                time.sleep(backoff * (attempt + 1))
+                continue
+            raise
+
+
+def parse_kickoff(iso: str) -> str:
+    try:
+        # keep original timezone info if present
+        dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+        return dt.isoformat()
+    except Exception:
+        return iso
 
 
 def build_position_map(bootstrap: dict) -> dict:
@@ -102,6 +141,41 @@ def find_players(bootstrap: dict, query: str) -> list:
         return list({el['id']: el for el in name_to_elems[close[0]]}.values())
 
     return []
+
+
+def _extract_gameweek_stats(history: List[dict], fixtures_map: Dict[int, dict] = None) -> List[dict]:
+    """Convert element-summary history entries into simplified per-gameweek stats.
+
+    Each returned item contains:
+      - event (round/gameweek id when available)
+      - goals (goals_scored)
+      - assists
+      - yellow_cards
+      - red_cards
+      - goals_conceded
+      - total_score (per-gameweek points; tries several common field names)
+    """
+    out = []
+    fixtures_map = fixtures_map or {}
+    for h in history or []:
+        ev = h.get("round") or h.get("event") or (fixtures_map.get(h.get("fixture"), {}) if h.get("fixture") else {}) and None
+        # if fixture map contains event, prefer it
+        if h.get("fixture") and fixtures_map and h.get("fixture") in fixtures_map:
+            ev = fixtures_map[h.get("fixture")].get("event")
+
+        total_score = h.get("total_points") or h.get("event_points") or h.get("points") or h.get("total") or 0
+
+        item = {
+            "event": ev,
+            "goals": h.get("goals_scored") or 0,
+            "assists": h.get("assists") or 0,
+            "yellow_cards": h.get("yellow_cards") or 0,
+            "red_cards": h.get("red_cards") or 0,
+            "goals_conceded": h.get("goals_conceded") or 0,
+            "total_score": total_score,
+        }
+        out.append(item)
+    return out
 
 
 @click.command()

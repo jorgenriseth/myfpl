@@ -1,5 +1,10 @@
 from pathlib import Path
 
+rule minimal_rule:
+  shell:
+    "echo 'This is a minimal rule' > minimal.txt"
+
+
 rule download_base_data:
   output:
     "base-data.json"
@@ -7,18 +12,37 @@ rule download_base_data:
     "curl https://fantasy.premierleague.com/api/bootstrap-static/ | jq . > {output}"
 
 
+rule fixtures_map:
+  output:
+    "players/fixtures.json"
+  shell:
+    "python -m myfpl.fixtures --output {output}"
+
+
 def output_dir(_, output):
   return Path(output[0]).parent
 
+
 rule parse_player:
   input:
-    bootstrap="base-data.json"
+    bootstrap="base-data.json",
+    fixtures="players/fixtures.json"
   output:
     "players/{player}.json"
   params:
     outdir=output_dir
   shell:
-    "python player_data.py --player {wildcards.player} --bootstrap {input.bootstrap} --output-dir {params.outdir}"
+    "python -m myfpl.player --player {wildcards.player} --bootstrap {input.bootstrap} --output-dir {params.outdir} --fixtures {input.fixtures}"
+
+
+rule player_score_plot:
+  input:
+    "players/{player}.json"
+  output:
+    "players/{player}.png"
+  script:
+    "scripts/player_score_plot.py"
+
 
 
 #### Standard rule  #####
