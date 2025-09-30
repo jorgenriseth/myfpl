@@ -33,5 +33,9 @@ dev = { features = ["dev"], solve-group = "default" }
 
 
 [tool.setuptools]
-py-modules = ["player_data", "validate"]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["myfpl*"]
 

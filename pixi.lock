@@ -2152,7 +2152,7 @@ packages:
 - pypi: ./
   name: myfpl
   version: 0.1.0
-  sha256: 9d6348bcd79d1a0562c1f4a852493e3c6d314394626a74e0421d10544cc6b5bc
+  sha256: a636f7962eaa80fc3d8d5e105265393474a5d4f576d3c4b96612d44f760a92ed
   requires_dist:
   - fpl>=0.6.35
   - jupyter>=1.1.1

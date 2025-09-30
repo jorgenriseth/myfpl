@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 
-import validate as V
+import myfpl.validate as V
 
 
 def make_sample_bootstrap():
