@@ -41,6 +41,19 @@ def build_position_map(bootstrap: dict) -> dict:
     return pos_map
 
 
+def build_team_map(bootstrap: dict) -> dict:
+    """Return a mapping team_id -> dict with id, name, short_name, code"""
+    tm = {}
+    for t in bootstrap.get("teams", []):
+        tm[t["id"]] = {
+            "id": t.get("id"),
+            "name": t.get("name"),
+            "short_name": t.get("short_name"),
+            "code": t.get("code"),
+        }
+    return tm
+
+
 def find_players(bootstrap: dict, query: str) -> list:
     """Return a list of element dicts matching the query.
 
@@ -98,7 +111,9 @@ def find_players(bootstrap: dict, query: str) -> list:
 @click.option('--output-dir', 'output_dir', default='.', show_default=True,
               type=click.Path(file_okay=False, dir_okay=True, writable=True),
               help='Directory to write player JSON files to')
-def cli(player: str, bootstrap_path: str, output_dir: str):
+@click.option('--write-all', '-a', is_flag=True, default=False,
+              help='When multiple players match, write all without prompting')
+def cli(player: str, bootstrap_path: str, output_dir: str, write_all: bool):
     """Extract player info from BOOTSTRAP and write a JSON file into OUTPUT_DIR."""
 
     if not os.path.exists(bootstrap_path):
@@ -112,6 +127,7 @@ def cli(player: str, bootstrap_path: str, output_dir: str):
         raise SystemExit(3)
 
     pos_map = build_position_map(boot)
+    team_map = build_team_map(boot)
 
     matches = find_players(boot, player)
     if not matches:
@@ -121,8 +137,43 @@ def cli(player: str, bootstrap_path: str, output_dir: str):
     # ensure output dir exists
     os.makedirs(output_dir, exist_ok=True)
 
+    # If multiple matches and user didn't pass --write-all, offer interactive disambiguation
+    selected = list(range(len(matches)))
+    if len(matches) > 1 and not write_all:
+        click.echo(f"Multiple players matched the query '{player}':")
+        for idx, el in enumerate(matches, start=1):
+            full_name = ((el.get('first_name') or '') + ' ' + (el.get('second_name') or '')).strip()
+            team_info = team_map.get(el.get('team'))
+            team_name = team_info.get('name') if team_info else str(el.get('team'))
+            pos = pos_map.get(el.get('element_type'), str(el.get('element_type')))
+            click.echo(f"  [{idx}] {full_name or el.get('web_name')} — {pos} — {team_name} (id={el.get('id')})")
+
+        click.echo("Choose which player(s) to write by entering numbers separated by commas,")
+        click.echo("or enter 'a' to write all, or just press Enter to cancel.")
+        resp = click.prompt('Selection', default='', show_default=False)
+        resp = (resp or '').strip()
+        if resp.lower() == 'a':
+            selected = list(range(len(matches)))
+        elif resp == '':
+            click.echo('No selection made; aborting.', err=True)
+            raise SystemExit(0)
+        else:
+            # parse comma-separated list of indices
+            try:
+                parts = [int(p.strip()) for p in resp.split(',') if p.strip()]
+                # convert to zero-based indices and filter
+                selected = [p - 1 for p in parts if 1 <= p <= len(matches)]
+                if not selected:
+                    click.echo('No valid selection parsed; aborting.', err=True)
+                    raise SystemExit(0)
+            except ValueError:
+                click.echo('Invalid selection input; aborting.', err=True)
+                raise SystemExit(1)
+
     written = []
     for i, el in enumerate(matches, start=1):
+        if (i - 1) not in selected:
+            continue
         full_name = ((el.get('first_name') or '') + ' ' + (el.get('second_name') or '')).strip()
         position = pos_map.get(el.get('element_type'), str(el.get('element_type')))
         now_cost_raw = el.get('now_cost')
@@ -161,6 +212,13 @@ def cli(player: str, bootstrap_path: str, output_dir: str):
             'ep_next': el.get('ep_next'),
         }
 
+        # include team metadata (id + human name) instead of numeric id only
+        team_info = team_map.get(el.get('team'))
+        if team_info:
+            team_field = team_info
+        else:
+            team_field = {"id": el.get('team')}
+
         out = {
             'name': full_name or el.get('web_name'),
             'position': position,
@@ -168,7 +226,7 @@ def cli(player: str, bootstrap_path: str, output_dir: str):
             'total_points': total_points,
             'web_name': el.get('web_name'),
             'status': el.get('status'),
-            'team': el.get('team'),
+            'team': team_field,
             'scoring_stats': scoring_stats,
             'now_cost_raw': now_cost_raw,
         }

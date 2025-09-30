@@ -1,6 +1,6 @@
 .snakemake 
 players/
-
+base-data.json
 
 
 # Python-generated files
