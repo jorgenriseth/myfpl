@@ -70,17 +70,8 @@ def plot_scores(
 
 
 def main():
-    # Snakemake provides `snakemake` object when run via `script:`. If run standalone
-    # allow passing input and output paths as args for quick testing.
-    # if "snakemake" in globals():
-    inp = Path(snakemake.input[0])
-    outp = Path(snakemake.output[0])
-    # else:
-    #     if len(sys.argv) < 3:
-    #         print("Usage: player_score_plot.py <player.json> <out.png>")
-    #         sys.exit(2)
-    #     inp = Path(sys.argv[1])
-    #     outp = Path(sys.argv[2])
+    inp = Path(str(snakemake.input[0]))
+    outp = Path(str(snakemake.output[0]))
 
     player = read_player(inp)
     gw, scores = extract_gameweek_scores(player)
