@@ -11,6 +11,7 @@ import sys
 from typing import List, Tuple, Dict
 
 import matplotlib
+
 # Use a non-interactive backend which is safe in CI/envs without display
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -53,7 +54,9 @@ def extract_gameweek_scores(player: Dict) -> Tuple[List[int], List[int]]:
     return list(gw), list(scores)
 
 
-def plot_scores(gameweeks: List[int], scores: List[int], player_name: str, outpath: Path) -> None:
+def plot_scores(
+    gameweeks: List[int], scores: List[int], player_name: str, outpath: Path
+) -> None:
     plt.figure(figsize=(max(6, len(gameweeks) * 0.6), 4))
     plt.bar(gameweeks, scores, color="#1f77b4")
     plt.xlabel("Gameweek")
@@ -69,15 +72,15 @@ def plot_scores(gameweeks: List[int], scores: List[int], player_name: str, outpa
 def main():
     # Snakemake provides `snakemake` object when run via `script:`. If run standalone
     # allow passing input and output paths as args for quick testing.
-    if "snakemake" in globals():
-        inp = Path(snakemake.input[0])
-        outp = Path(snakemake.output[0])
-    else:
-        if len(sys.argv) < 3:
-            print("Usage: player_score_plot.py <player.json> <out.png>")
-            sys.exit(2)
-        inp = Path(sys.argv[1])
-        outp = Path(sys.argv[2])
+    # if "snakemake" in globals():
+    inp = Path(snakemake.input[0])
+    outp = Path(snakemake.output[0])
+    # else:
+    #     if len(sys.argv) < 3:
+    #         print("Usage: player_score_plot.py <player.json> <out.png>")
+    #         sys.exit(2)
+    #     inp = Path(sys.argv[1])
+    #     outp = Path(sys.argv[2])
 
     player = read_player(inp)
     gw, scores = extract_gameweek_scores(player)

@@ -5,21 +5,18 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "fpl>=0.6.35",
-    "jupyter>=1.1.1",
-    "pandas>=2.3.2",
-    "matplotlib>=3.8",
-    "snakemake>=9.11.2",
-    "click>=8.1.7",
+  "fpl>=0.6.35",
+  "jupyter>=1.1.1",
+  "pandas>=2.3.2",
+  "matplotlib>=3.8",
+  "click>=8.1.7",
 ]
 
 [dependency-groups]
-dev = [
-    "ipython>=9.5.0",
-]
+dev = ["ipython>=9.5.0"]
 
 [tool.pixi.workspace]
-channels = ["conda-forge"]
+channels = ["conda-forge", "bioconda"]
 platforms = ["linux-64", "osx-arm64"]
 
 [tool.pixi.pypi-dependencies]
@@ -31,12 +28,15 @@ dev = { features = ["dev"], solve-group = "default" }
 
 [tool.pixi.tasks]
 
+[tool.pixi.dependencies]
+snakemake = "*"
+jupyter = "*"
+seaborn = "*"
 
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["myfpl*"]
-

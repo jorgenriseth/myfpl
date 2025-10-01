@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Combined player metadata + per-gameweek history extractor for FPL bootstrap + API."""
+
 import json
 import os
 import re
@@ -85,7 +86,9 @@ def find_players(bootstrap: dict, query: str) -> list:
     candidates = []
     for el in elements:
         web = (el.get("web_name") or "").strip()
-        full = ((el.get("first_name") or "") + " " + (el.get("second_name") or "")).strip()
+        full = (
+            (el.get("first_name") or "") + " " + (el.get("second_name") or "")
+        ).strip()
         alt = (el.get("second_name") or "").strip()
         first = (el.get("first_name") or "").strip()
         for nm in {web, full, alt, first}:
@@ -95,29 +98,36 @@ def find_players(bootstrap: dict, query: str) -> list:
             name_to_elems.setdefault(key, []).append(el)
             candidates.append(key)
     if q in name_to_elems:
-        return list({el['id']: el for el in name_to_elems[q]}.values())
+        return list({el["id"]: el for el in name_to_elems[q]}.values())
     substring_keys = [name for name in candidates if q in name]
     if substring_keys:
         seen = {}
         for key in substring_keys:
             for el in name_to_elems.get(key, []):
-                seen[el['id']] = el
+                seen[el["id"]] = el
         return list(seen.values())
     close = get_close_matches(q, candidates, n=1, cutoff=0.6)
     if close:
-        return list({el['id']: el for el in name_to_elems[close[0]]}.values())
+        return list({el["id"]: el for el in name_to_elems[close[0]]}.values())
     return []
 
 
-
-def _extract_gameweek_stats(history: List[dict], fixtures_map: Dict[int, dict] = None) -> List[dict]:
+def _extract_gameweek_stats(
+    history: List[dict], fixtures_map: Dict[int, dict] = None
+) -> List[dict]:
     out = []
     fixtures_map = fixtures_map or {}
     for h in history or []:
         ev = h.get("round") or h.get("event")
         if h.get("fixture") and fixtures_map and h.get("fixture") in fixtures_map:
             ev = fixtures_map[h.get("fixture")].get("event")
-        total_score = h.get("total_points") or h.get("event_points") or h.get("points") or h.get("total") or 0
+        total_score = (
+            h.get("total_points")
+            or h.get("event_points")
+            or h.get("points")
+            or h.get("total")
+            or 0
+        )
         item = {
             "event": ev,
             "goals": h.get("goals_scored") or 0,
@@ -133,21 +143,56 @@ def _extract_gameweek_stats(history: List[dict], fixtures_map: Dict[int, dict] =
 
 @click.command()
 @click.option("--player", required=True, help="Player name (web name or full name)")
-@click.option("--bootstrap", "bootstrap_path", default="bootstrap-static.json", show_default=True,
-              help="Path to bootstrap-static.json")
-@click.option("--output-dir", "output_dir", default="./players", show_default=True,
-              type=click.Path(file_okay=False, dir_okay=True, writable=True),
-              help="Directory to write outputs to")
-@click.option("--fixtures", "fixtures_path", default=None, show_default=True,
-              type=click.Path(file_okay=True, dir_okay=False, readable=True),
-              help="Path to a fixtures.json file to use instead of fetching (overrides --no-fetch)")
-@click.option("--no-fetch", is_flag=True, default=False,
-              help="Do not fetch element-summary/fixtures from network; only use bootstrap")
-@click.option("--keep-summaries", is_flag=True, default=False,
-              help="Do not remove downloaded element_{id}_summary.json files (useful for debugging)")
-@click.option("--verbose", is_flag=True, default=False,
-              help="Print extra debug information about network fetches and parsed data")
-def cli(player: str, bootstrap_path: str, output_dir: str, fixtures_path: str, no_fetch: bool, keep_summaries: bool, verbose: bool):
+@click.option(
+    "--bootstrap",
+    "bootstrap_path",
+    default="bootstrap-static.json",
+    show_default=True,
+    help="Path to bootstrap-static.json",
+)
+@click.option(
+    "--output-dir",
+    "output_dir",
+    default="./players",
+    show_default=True,
+    type=click.Path(file_okay=False, dir_okay=True, writable=True),
+    help="Directory to write outputs to",
+)
+@click.option(
+    "--fixtures",
+    "fixtures_path",
+    default=None,
+    show_default=True,
+    type=click.Path(file_okay=True, dir_okay=False, readable=True),
+    help="Path to a fixtures.json file to use instead of fetching (overrides --no-fetch)",
+)
+@click.option(
+    "--no-fetch",
+    is_flag=True,
+    default=False,
+    help="Do not fetch element-summary/fixtures from network; only use bootstrap",
+)
+@click.option(
+    "--keep-summaries",
+    is_flag=True,
+    default=False,
+    help="Do not remove downloaded element_{id}_summary.json files (useful for debugging)",
+)
+@click.option(
+    "--verbose",
+    is_flag=True,
+    default=False,
+    help="Print extra debug information about network fetches and parsed data",
+)
+def cli(
+    player: str,
+    bootstrap_path: str,
+    output_dir: str,
+    fixtures_path: str,
+    no_fetch: bool,
+    keep_summaries: bool,
+    verbose: bool,
+):
     if not os.path.exists(bootstrap_path):
         click.echo(f"bootstrap file not found: {bootstrap_path}", err=True)
         raise SystemExit(2)
@@ -173,14 +218,22 @@ def cli(player: str, bootstrap_path: str, output_dir: str, fixtures_path: str, n
             # Accept either a raw fixtures list (from the FPL API) or a pre-built fixtures_map
             if isinstance(fixtures, dict):
                 # assume it's already a fixtures_map: fixture_id -> {event,..}
-                fixtures_map = {int(k): v for k, v in fixtures.items()} if fixtures else {}
-                click.echo(f"Loaded pre-parsed fixtures_map with {len(fixtures_map)} entries from {fixtures_path}")
+                fixtures_map = (
+                    {int(k): v for k, v in fixtures.items()} if fixtures else {}
+                )
+                click.echo(
+                    f"Loaded pre-parsed fixtures_map with {len(fixtures_map)} entries from {fixtures_path}"
+                )
             else:
                 # assume raw list
                 fixtures_map = build_fixtures_map(fixtures)
-                click.echo(f"Loaded {len(fixtures_map)} fixtures from raw fixtures file {fixtures_path}")
+                click.echo(
+                    f"Loaded {len(fixtures_map)} fixtures from raw fixtures file {fixtures_path}"
+                )
         except Exception as e:
-            click.echo(f"Warning: failed to load fixtures from {fixtures_path}: {e}", err=True)
+            click.echo(
+                f"Warning: failed to load fixtures from {fixtures_path}: {e}", err=True
+            )
             fixtures_map = {}
     else:
         fixtures_map = get_fixtures_map(output_dir, no_fetch=no_fetch)
@@ -188,9 +241,13 @@ def cli(player: str, bootstrap_path: str, output_dir: str, fixtures_path: str, n
             click.echo(f"Loaded {len(fixtures_map)} fixtures")
         else:
             if no_fetch:
-                click.echo("No local fixtures.json found; continuing without fixture mapping")
+                click.echo(
+                    "No local fixtures.json found; continuing without fixture mapping"
+                )
             else:
-                click.echo("Failed to fetch fixtures; continuing without fixture mapping")
+                click.echo(
+                    "Failed to fetch fixtures; continuing without fixture mapping"
+                )
 
     pos_map = build_position_map(boot)
     team_map = build_team_map(boot)
@@ -198,7 +255,9 @@ def cli(player: str, bootstrap_path: str, output_dir: str, fixtures_path: str, n
     written = []
     for el in matches:
         pid = el.get("id")
-        full_name = ((el.get("first_name") or "") + " " + (el.get("second_name") or "")).strip() or el.get("web_name")
+        full_name = (
+            (el.get("first_name") or "") + " " + (el.get("second_name") or "")
+        ).strip() or el.get("web_name")
         position = pos_map.get(el.get("element_type"), str(el.get("element_type")))
         now_cost_raw = el.get("now_cost")
         try:
@@ -231,13 +290,23 @@ def cli(player: str, bootstrap_path: str, output_dir: str, fixtures_path: str, n
                 except Exception as e:
                     # non-fatal if we cannot save the summary
                     if verbose:
-                        click.echo(f"Warning: failed to write element summary to {summary_file}: {e}", err=True)
+                        click.echo(
+                            f"Warning: failed to write element summary to {summary_file}: {e}",
+                            err=True,
+                        )
                 if verbose:
-                    click.echo(f"Fetched element-summary for id={pid}, history entries: {len(history_raw)} (history: {len(hist_cur)}, history_past: {len(hist_past)})")
+                    click.echo(
+                        f"Fetched element-summary for id={pid}, history entries: {len(history_raw)} (history: {len(hist_cur)}, history_past: {len(hist_past)})"
+                    )
                     if not history_raw:
-                        click.echo(f"Debug: element-summary response keys: {list(summary.keys())}")
+                        click.echo(
+                            f"Debug: element-summary response keys: {list(summary.keys())}"
+                        )
             except Exception as e:
-                click.echo(f"Warning: failed to fetch element-summary for id={pid}: {e}", err=True)
+                click.echo(
+                    f"Warning: failed to fetch element-summary for id={pid}: {e}",
+                    err=True,
+                )
 
         history = _extract_gameweek_stats(history_raw, fixtures_map)
 
@@ -267,10 +336,14 @@ def cli(player: str, bootstrap_path: str, output_dir: str, fixtures_path: str, n
                 if os.path.exists(summary_file):
                     os.remove(summary_file)
             except Exception as e:
-                click.echo(f"Warning: failed to remove temporary file {summary_file}: {e}", err=True)
+                click.echo(
+                    f"Warning: failed to remove temporary file {summary_file}: {e}",
+                    err=True,
+                )
 
     click.echo(f"Wrote {len(written)} player file(s).")
 
 
 if __name__ == "__main__":
     cli()
+

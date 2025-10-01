@@ -94,7 +94,9 @@ def match_candidate(candidate: str, players: list[dict]) -> list[dict]:
     return matches
 
 
-def match_candidate_with_team(candidate: str, team_hint: str | None, players: list[dict]) -> list[dict]:
+def match_candidate_with_team(
+    candidate: str, team_hint: str | None, players: list[dict]
+) -> list[dict]:
     """
     Match a candidate name, and optionally use a team_hint to filter ambiguous matches.
     The team_hint is normalized and compared against player's team_name, team_short, and team_code.
@@ -142,7 +144,7 @@ def parse_input_line(line: str) -> tuple[str, str | None]:
     return line.strip(), None
 
 
-def write_validated_yaml(output: Path, validated: list[tuple]):
+def write_validated_yaml(output: Path, validated: list[tuple], players: list[dict]):
     # validated: list of (name, position, price, player_id, team_id, team_name)
     # Use PyYAML to produce a structured YAML document for easier consumption later.
     # Output structure:
@@ -153,6 +155,18 @@ def write_validated_yaml(output: Path, validated: list[tuple]):
     #     price: <float>
     #     team_id: <int>
     #     team_name: <string>
+    def norm_full_name(first_name: str, second_name: str) -> str:
+        import unicodedata
+        import re
+
+        full = f"{first_name} {second_name}".strip()
+        s = unicodedata.normalize("NFKD", full)
+        s = "".join(ch for ch in s if not unicodedata.combining(ch))
+        s = s.lower()
+        s = re.sub(r"\s+", "_", s)
+        s = re.sub(r"[^a-z0-9_]", "", s)
+        return s
+
     out = {"team": {}}
     for entry in validated:
         # unpack with safety for older formats
@@ -161,8 +175,39 @@ def write_validated_yaml(output: Path, validated: list[tuple]):
             pid = None
             team_id = None
             team_name = ""
+            # fallback: use normalized name string
+            norm_name = norm_full_name(name, "")
         else:
             name, pos, price, pid, team_id, team_name = entry
+            # Find the player in the bootstrap index to get first and second name
+            # Use the validated name to match the player
+            # If not found, fallback to normalized name string
+            norm_name = None
+            # Try to get first and second name from the validated entry
+            # The validated entry is built from the player dict, so we can use the candidate name to match
+            # But we need to pass first_name and second_name from the player dict
+            # Instead, let's use the candidate name and try to split
+            # But best is to use the player dict if available
+            # For this, we need to pass first_name and second_name in the validated tuple
+            # But since we don't, fallback to normalized name string
+            norm_name = None
+            if pid is not None:
+                # Find player in players list by id
+                player = None
+                # Use the global 'players' list if available
+                try:
+                    for p in players:
+                        if p.get("id") == pid:
+                            player = p
+                            break
+                except Exception:
+                    player = None
+                if player:
+                    norm_name = norm_full_name(
+                        player.get("first_name", ""), player.get("second_name", "")
+                    )
+            if not norm_name:
+                norm_name = norm_full_name(name, "")
         out_name = name
         out["team"][out_name] = {
             "id": pid,
@@ -170,6 +215,7 @@ def write_validated_yaml(output: Path, validated: list[tuple]):
             "price": float(price) if price is not None else None,
             "team_id": team_id,
             "team_name": team_name,
+            "norm_full_name": norm_name,
         }
     try:
         yaml.safe_dump(out, output.open("w", encoding="utf8"), sort_keys=False)
@@ -286,7 +332,7 @@ def main():
         total_players = len(validated_list)
         total_cost = sum((p[2] or 0.0) for p in validated_list)
         # count positions
-        counts = {"GK": 0, "DEF": 0, "MID": 0, "FWD": 0, "UNKNOWN": 0}
+        counts = {"GKP": 0, "DEF": 0, "MID": 0, "FWD": 0, "UNKNOWN": 0}
         club_counts = {}
         for entry in validated_list:
             _, pos, price, pid, team_id, team_name = entry
@@ -307,9 +353,11 @@ def main():
         # - Max 3 players from the same club
         # - Budget: total cost must be <= budget_millions (default 100.0)
         if total_players != 15:
-            report["violations"].append(f"Squad size must be 15 (found {total_players})")
+            report["violations"].append(
+                f"Squad size must be 15 (found {total_players})"
+            )
         # check exact position counts
-        expected = {"GK": 2, "DEF": 5, "MID": 5, "FWD": 3}
+        expected = {"GKP": 2, "DEF": 5, "MID": 5, "FWD": 3}
         for k, v in expected.items():
             if counts.get(k, 0) != v:
                 report["violations"].append(
@@ -334,7 +382,7 @@ def main():
     if args.enforce_rules:
         report = validate_rules(validated, args.budget)
 
-    write_validated_yaml(opath, validated)
+    write_validated_yaml(opath, validated, players)
     print(f"Wrote validated team to {opath}")
 
     # Print short validation report
